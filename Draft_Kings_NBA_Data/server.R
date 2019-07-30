@@ -3,9 +3,9 @@
 # application by clicking 'Run App' above.
 #
 
-source("C:/Users/mille/OneDrive/Documents/ST-558-Final-Project-Draft-Kings/DraftKingsData.R")
-
-source("C:/Users/mille/OneDrive/Documents/ST-558-Final-Project-Draft-Kings/getStat.R")
+#source("C:/Users/mille/OneDrive/Documents/ST-558-Final-Project-Draft-Kings/DraftKingsData.R")
+# 
+#source("../DraftKingsData.R")
 
 library(tidyverse)
 library(haven)
@@ -18,9 +18,36 @@ library(ggplot2)
 library(ggiraphExtra)
 library(gbm)
 library(DT)
+library(plotly)
+
+
+draftKingsData <- read_csv("../draftKingsData.csv")
+
+
+draftKingsData$PlayerName <- as.factor(draftKingsData$PlayerName)
+
+draftKingsData$`Inj` <- ifelse(is.na(draftKingsData$Inj), "None", draftKingsData$Inj)
+
+draftKingsData$Inj <- as.factor(draftKingsData$Inj)
+
+draftKingsData$Pos <- as.factor(draftKingsData$Pos)
+
+draftKingsData$Team <- as.factor(draftKingsData$Team)
+
+draftKingsData$Opp <- as.factor(draftKingsData$Opp)
+
+draftKingsData$Rest <- as.numeric(draftKingsData$Rest)
+
+draftKingsData$DvP <- substr(draftKingsData$DvP, 1, nchar(draftKingsData$DvP, type="chars")-1)
+
+draftKingsData$DvP <- as.numeric(draftKingsData$DvP)
+
+draftKingsData
+
 
 # Define server logic required to draw a histogram
 shinyServer(function(input, output, session) {
+    
     
     getData <- reactive({
         playerName <- input$player
@@ -29,12 +56,12 @@ shinyServer(function(input, output, session) {
         playerData
     })
     
-    getData2 <- reactive({
-        variableName <- input$variables
+    #getData2 <- reactive({
+        #variableName <- input$variables
 
         variableData <- draftKingsData %>% select(-Likes, -PS, -ProjFP, -ProjVal, -Min )
         variableData
-    })
+    #})
     
     getData3 <- reactive({
         nonZero <- input$zero
@@ -57,10 +84,21 @@ shinyServer(function(input, output, session) {
         modelData <- draftKingsData %>% select(-Likes, -PS, -ProjFP, -ProjVal, -Min)
         modelData
     })
-
+    
+    getData6 <- reactive({
+        
+        modelData2 <- na.omit(draftKingsData) %>% filter(PlayerName == input$player2) %>% select(-Likes, -PS, -ProjFP, -ProjVal, -Min)
+        train <- sample(1:nrow(na.omit(modelData2)), size = nrow(na.omit(modelData2))*0.8)
+        test <- dplyr::setdiff(1:nrow(modelData2), train)
+        predDataTrain <- modelData2[train, ]
+        predDataTest <- modelData2[test, ]
+    })
+    
+    
     output$variablePlot <- renderPlotly({
         #get data
-        variableData <- getData2()
+        variableData <- draftKingsData %>% select(-Likes, -PS, -ProjFP, -ProjVal, -Min )
+        
         nonZeroData <- getData3()
 
         #base plotting object
@@ -180,16 +218,7 @@ shinyServer(function(input, output, session) {
         
     })
     #     
-        #add effects if requested
-    #     if (input$conservation & input$alpha) {
-    #         g + geom_point(size = input$size, aes(col = conservation, alpha = sleep_rem))
-    #     } else if (input$conservation) {
-    #         g + geom_point(size = input$size, aes(col = conservation))
-    #     } else {
-    #         g + geom_point(size = input$size)
-    #     }
-    # })
-    
+        
     output$playerTable <- renderTable({   
         
         playerData <- getData()
@@ -209,30 +238,7 @@ shinyServer(function(input, output, session) {
         }
         
     })
-        #if(input$player == ){
-            # if(input$stat=="Avg Fantasy Points" & input$stat=="Avg Value"){
-            # playerData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`), "Average Value" = mean(`Actual Val`))
-            # } else if(input$stat== "Avg Value"){
-            #     playerData %>% group_by(`Player Name`) %>% summarise("Average Value" = mean(`Actual Val`))
-            # } else if(input$stat=="Avg Fantasy Points"){
-            # playerData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`))
-            # }
-        #} else("Select Statistics")
-    
-    
-    ###Hierarchical Clustering
-    
-    
-    # output$hierCluster <- renderPlotly({
-    #     clusterData <- getData4()
-    # 
-    # 
-    # hierClust <- hclust(dist(data.frame(input$xvar, input$yvar)))
-    # plot(hierClust, xlab = "")
-    # 
-    # 
-    # })
-    
+        
 #    ###CLUSTER GRAPH 
     selectedData <- reactive({
         clusterData <- getData4()
@@ -258,13 +264,20 @@ shinyServer(function(input, output, session) {
     ####MODELING
     
     output$Formula <- renderPrint({
+        if(is.null(input$lr)){
+            "Please Select Predictor Variables"
+        } else{
         
-        
-        as.formula(paste(input$Resp, "~", paste(input$lr, collapse= " + ")))
+        paste("Regression Formula: FP", "~", paste(input$lr, collapse= " + "))
+        }
     })
     
     output$lrPlot <- renderPlot({
 
+        if(is.null(input$lr)){
+            print("Please select a predictor")
+        } else{
+        
         modelData <-getData5()
 
         #Create training set and testing set
@@ -274,7 +287,7 @@ shinyServer(function(input, output, session) {
         predDataTrain <- modelData[train, ]
         predDataTest <- modelData[test, ]
 
-        formula <- as.formula(paste(input$Resp, "~", paste(input$lr, collapse= " + ")))
+        formula <- as.formula(paste("FP", "~", paste(input$lr, collapse= " + ")))
         
     lrFit <- lm(formula = formula, data = predDataTrain)
     
@@ -286,6 +299,7 @@ shinyServer(function(input, output, session) {
     # } else "Select Predictor Variables"
     plot(lrFit)
 
+        }
 
 
 
@@ -294,33 +308,51 @@ shinyServer(function(input, output, session) {
     
     output$lrTable <- renderTable({
         
-        modelData <-getData5()
-        
-        set.seed(31)
-        train <- sample(1:nrow(na.omit(modelData)), size = nrow(na.omit(modelData))*0.8)
-        test <- dplyr::setdiff(1:nrow(modelData), train)
-        predDataTrain <- modelData[train, ]
-        predDataTest <- modelData[test, ]
-        
-        formula <- as.formula(paste(input$Resp, "~", paste(input$lr, collapse= " + ")))
-        
-        lrFit <- lm(formula = formula, data = predDataTrain)
-        
-        lrPredict <- predict(lrFit, predDataTest)
-        mean(as.vector(lrPredict)-as.vector(predDataTest$FP))^2
-        
-        # require(MuMIn)
-        # fitStats <- data.frame(fitStat = c("Adj R Square", "AIC", "AICc", "BIC", "RMSE"),
-        #                        "Linear Regression Fit" = round(c(summary(lrFit)$adj.r.squared, AIC(lrFit),
-        #                                       MuMIn::AICc(lrFit), BIC(lrFit), sqrt(mean((lrPredict-predDataTest$FP)^2))), 3))
-        # 
-        # fitStats
-        
-        
+        if(is.null(input$lr)){
+            "Please select a predictor"
+        } else {
+            modelData <-getData5()
+            
+            set.seed(31)
+            train <- sample(1:nrow(na.omit(modelData)), size = nrow(na.omit(modelData))*0.8)
+            test <- dplyr::setdiff(1:nrow(modelData), train)
+            predDataTrain <- modelData[train, ]
+            predDataTest <- modelData[test, ]
+            
+            formula <- as.formula(paste("FP", "~", paste(input$lr, collapse= " + ")))
+            
+            lrFit <- lm(formula = formula, data = predDataTrain)
+            
+            lrPredict <- predict(lrFit, predDataTest)
+            #mean(as.vector(lrPredict)-as.vector(predDataTest$FP))^2
+            
+            RMSE<-sqrt(mean((lrPredict-predDataTest$FP)^2, na.rm = TRUE))
+            require(MuMIn)
+            fitStats <- data.frame(fitStat = c("RMSE", "Adj R Square", "AIC", "AICc", "BIC"),
+                                   "Linear Regression Fit" = round(c(RMSE,summary(lrFit)$adj.r.squared, AIC(lrFit), MuMIn::AICc(lrFit), BIC(lrFit)), 3))
+    
+            
+            
+            
+           
+        }
+    })
+    
+    output$boostFormula <- renderPrint({
+        if(is.null(input$boosted)){
+            "Please Select Predictor Variables"
+        } else{
+            
+            paste("Boosted Model Formula: FP", "~", paste(input$boosted, collapse= " + "))
+        }
     })
     
     output$boostPlot <- renderPlot({
         
+        if(is.null(input$boosted)){
+            "Please Select Predictor Variables"
+        } else{
+            
         modelData <-getData5()
         
         #Create training set and testing set
@@ -349,11 +381,15 @@ shinyServer(function(input, output, session) {
         
         summary(boostFit)
         
-        
+        }
     })
     
     output$boostTable <- renderTable({
         
+        if(is.null(input$boosted)){
+            "Please Select Predictor Variables"
+        } else{
+            
         modelData <-getData5()
         
         #Create training set and testing set
@@ -366,184 +402,175 @@ shinyServer(function(input, output, session) {
         formula <- as.formula(paste("FP", "~", paste(input$boosted, collapse= " + ")))
         
         boostFit <- gbm(formula, data = predDataTrain, distribution = "gaussian", 
-                        n.trees = input$trees, shrinkage = input$shrinkage, interaction.depth = input$interaction)
+                        n.trees = input$trees, shrinkage = input$shrinkage, 
+                        interaction.depth = input$interaction)
         
         boostPred <- predict(boostFit, 
                              newdata = dplyr::select(predDataTest, -FP), 
                              n.trees = input$trees)
         
         
-        # if(length(input$lr) > 0 ){
-        #     ggPredict(lrFit)
-        # } else "Select Predictor Variables"
+       summary(boostFit)
         
-        
-        # plot(boostPred, type="l")
-        
-        summary(boostFit)
-        
-        
+        }
     })
     
+    output$Predictions <- renderTable({
+        
+        modelData2 <-getData6()
+
+        #Create training set and testing set
+        
+        formula1 <- as.formula(paste("FP", "~", "USG", "+", "PER", "+", "SFGA", "+", "ProjMin", "+", "DEff", "+", "Pace", "+", "DvP", "+", "SFP"))
+        # 
+        lrFit <- lm(formula = formula1, data = predDataTrain)
+        # 
+        lrPredict <- predict(lrFit, newdata= data.frame(PlayerName = input$player2, USG = input$Usage, PER = input$PER, SFGA = input$SFGA, ProjMin = input$Mins, DEff = input$DEff, Pace = input$Pace, DvP = input$DvP, SFP = input$SFP))
+        # 
+        # formula2 <- as.formula(paste("FP", "~", paste(input$boosted, collapse= " + ")))
+        # 
+        boostFit <- gbm(formula1, data = predDataTrain, distribution = "gaussian",
+                        n.trees = input$trees, shrinkage = input$shrinkage, interaction.depth = input$interaction)
+        # 
+        boostPred <- predict(boostFit,
+                             newdata= data.frame(PlayerName = input$player2, USG = input$Usage, PER = input$PER, SFGA = input$SFGA, ProjMin = input$Mins, DEff = input$DEff, Pace = input$Pace, DvP = input$DvP, SFP = input$SFP),
+                             n.trees = input$trees2,
+                             shrinkage = input$shrinkage2,
+                             interaction.depth= input$interaction2)
+      
+        
+        
+        predictionTable <- data.frame("Player Name" = input$player2, "Predicted Fantasy Points: Linear Regression Model" = lrPredict, "Predicted Fantasy Points: Boosted Tree Model" = boostPred)
+        colnames(predictionTable) = c("Player Name", "Linear Regression Model", "Boosted Tree Model")
+        predictionTable
+    })
     
+    ###OUTPUT DATATABLE
     output$draftKingsDataset <- DT::renderDataTable({
-        draftKingsData
+        DT::datatable(draftKingsData, options = list(scrollX=TRUE))
     })
     
+    observe({
+        usageVal <- draftKingsData %>% filter(PlayerName == input$player2) %>% select(USG) %>% `[[`(1) %>% mean()
+        updateNumericInput(session, "Usage", "Fill in Average Usage",
+                 value = round(usageVal,2),  min=0, max=40)
+        
+        PerVal <- draftKingsData %>% filter(PlayerName == input$player2) %>% select(PER) %>% `[[`(1) %>% mean()
+        updateNumericInput(session, "PER", "Fill in Player Efficiency Rating",
+                           value = round(PerVal,2),  min=0, max=40)
+
+        FgaVal <- draftKingsData %>% filter(PlayerName == input$player2) %>% select(SFGA) %>% `[[`(1) %>% mean()
+        updateNumericInput(session, "SFGA", "Fill in Average Field Goal Attempts",
+                           value = round(FgaVal,2),  min=0, max=40)
+
+        MinVal <- draftKingsData %>% filter(PlayerName == input$player2) %>% select(ProjMin) %>% `[[`(1) %>% mean()
+        updateNumericInput(session, "Mins", "Fill in Projected Minutes",
+                           value = round(MinVal,2),  min=0, max=40)
+
+        SFPVal <- draftKingsData %>% filter(PlayerName == input$player2) %>% select(SFP) %>% `[[`(1) %>% mean()
+        updateNumericInput(session, "SFP", "Fill in Average Fantasy Points",
+                           value = round(SFPVal,2),  min=0, max=100)
+    })
+    
+    
+    output$saveData1 <- downloadHandler(
+        filename = function(){
+            "playerData.csv"
+        },
+        content = function(file){
+            
+            playerData <- getData()
+            
+            write_csv(playerData, file)
+        }
+    )
+    
+    
+    
+    output$saveData2 <- downloadHandler(
+        filename = function(){
+            "variableData.csv"
+        },
+        content = function(file){
+            
+            if(input$zero != TRUE){
+            variableData 
+            
+            write_csv(variableData, file)
+            } else {
+                nonZeroData <- getData3() 
+                
+                write_csv(nonZeroData, file)
+            
+            }
+        }
+    )
+   
+    
+    output$saveData3 <- downloadHandler(
+        filename = function(){
+            "clusterData.csv"
+        },
+        content = function(file){
+            
+            clusterData <- getData4()
+            
+            write_csv(clusterData, file)
+        }
+    )
+    
+    output$saveData4 <- downloadHandler(
+        filename = function(){
+            "modelData.csv"
+        },
+        content = function(file){
+            
+            modelData <- getData5() 
+            
+            write_csv(modelData, file)
+        }
+    )
+    
+    output$saveData5 <- downloadHandler(
+        filename = function(){
+            "modelData.csv"
+        },
+        content = function(file){
+            
+            modelData <- getData5() 
+            
+            write_csv(modelData, file)
+        }
+    )
+    
+    output$saveData6 <- downloadHandler(
+        filename = function(){
+            "modelData2.csv"
+        },
+        content = function(file){
+            
+            modelData2 <- getData6() 
+            
+            write_csv(modelData2, file)
+        }
+    )
+    
+    
+    # output$savePlot2 <- downloadHandler(
+    #     filename = function() { 
+    #         "variablePlot.png" 
+    #                 },
+    #     content = function(file) {
+    #         
+    #         
+    #         ggsave(file, plot = clusterPlot)
+    #     }
+    # )
     
 })
 #             
         
         
-        
-        # playerDataTable <- c()
-        # for (i in 1:length(input$stat)){
-        # playerDataTable[i] <- playerData %>% group_by(`Player Name`) %>% summarise(mean(input$stat[i]))
-        # return(input$stat)
-        # }
-        # statVec <- sapply(FUN = getStat, X = input$stat)
-        # statVec
-        # if(length(statVec)==0){
-        #     "Select some statistics"
-        # } else{for(i in 1:length(statVec)){
-        # playerData %>% group_by(`Player Name`) %>% summarise(mean(statVec[i]))
-        # }}
-        # playerDataTable <- c()
-        # for (i in 1:length(statVec)){
-        # playerDataTable[i] <- playerData %>% group_by(`Player Name`) %>% summarise(mean(statVec[i]))
-        # return(playerDataTable)
-        # }
-    # })
-    
-    #create table
-    # output$playerTable <- renderTable({
-    #     
-    #     playerData <- getData()
-    # 
-    #     if(input$stat[1]){
-    #         playerData %>% group_by(`Player Name`) %>% summarise("Average Usage" = mean(USG))
-    #     } else if (input$stat[2]){
-    #         PlayerData %>% group_by(`Player Name`) %>% summarise("Average Player Efficiency Rating" = mean(PER))
-    #     } else if(input$stat[3]){
-    #         playerData %>% group_by(`Player Name`) %>% summarise("Average Minutes" = mean(`Proj Min`))
-    #     } else if(input$stat[4]){
-    #         playerData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`))
-    #     } else if(input$stat[5]){
-    #         playerData %>% group_by(`Player Name`) %>% summarise("Average Value" = mean(`Actual Val`))
-    #     }
-    #     
-    # })
-# })
-            
-            
-#         if(input$stat == TRUE){
-#             playerData %>% group_by(`Player Name`) %>% summarise(mean(input$stat))
-#         }
-#     })
-# })
-        
-        # if(input$stat=="Avg Fantasy Points"){
-        #     playerData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`))
-        # } else {
-        #     if(input$stat=="Avg Usage"){
-        #         playerData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`), "Average Usage" = mean(USG))
-        #     } else {
-        #         if(input$stat=="Avg Player Efficiency Rating"){
-        #             playerData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`), "Average Usage" = mean(USG), "Average Player Efficiency Rating" = mean(PER))
-        #         } else{
-        #             if(input$stat=="Avg Minutes"){
-        #                 playerData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`), "Average Usage" = mean(USG), "Average Player Efficiency Rating" = mean(PER), "Average Minutes" = mean(`Proj Min`))
-        #             } else {
-        #                 if(input$stat=="Avg Value"){
-        #                     playerData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`), "Average Usage" = mean(USG), "Average Player Efficiency Rating" = mean(PER), "Average Minutes" = mean(`Proj Min`), "Average Value" = mean(`Actual Val`))
-        #                 } else{
-        #                     "Player" = input$player
-        #                     }
-        #             }}}}
-        #     })
-        # })
-        
-    #     if(input$stat=="Avg Fantasy Points"){
-    #         if(input$stat=="Avg Usage"){
-    #             if(input$stat=="Avg Player Efficiency Rating"){
-    #                 if(input$stat=="Avg Minutes"){
-    #                     if(input$stat=="Avg Value"){
-    #                         newData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`), "Average Usage" = mean(USG), "Average Player Efficiency Rating" = mean(PER), "Average Minutes" = mean(`Proj Min`), "Average Value" = mean(`Actual Val`))
-    #                     } else{
-    #                         newData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`), "Average Usage" = mean(USG), "Average Player Efficiency Rating" = mean(PER), "Average Minutes" = mean(`Proj Min`))
-    #                         }} else{
-    #                             newData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`), "Average Usage" = mean(USG), "Average Player Efficiency Rating" = mean(PER))
-    #                             }} else{
-    #                             newData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`), "Average Usage" = mean(USG))
-    #                                 }} else{
-    #                             newData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`))
-    #                                     }} else{
-    #                                         input$player
-    #                                     }
-    #                 
-    #     })
-    # })
-                            
-#                         newData %>% group_by(`Player Name`) %>% summarise("Average Minutes" = mean(`Proj Min`))
-#                     }
-#                     newData %>% group_by(`Player Name`) %>% summarise("Average Player Efficiency Rating" = mean(PER))
-#                 }
-#                 newData %>% group_by(`Player Name`) %>% summarise("Average Usage" = mean(USG))
-#             }
-#             newData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`))
-#         } else{
-#             "Player" = input$player
-#         }
-#     })
-# })
-        
-#         if(input$stat=="Avg Fantasy Points"){
-#             newData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`))
-#         } else{
-#             if(input$stat=="Avg Usage"){
-#                 newData %>% group_by(`Player Name`) %>% summarise("Average Usage" = mean(USG))
-#             } else{
-#                 if(input$stat=="Avg Usage"){
-#                     newData %>% group_by(`Player Name`) %>% summarise("Average Usage" = mean(USG))
-#                 } else{
-#                     if(input$stat=="Avg Player Efficiency Rating"){
-#                         newData %>% group_by(`Player Name`) %>% summarise("Average Player Efficiency Rating" = mean(PER))
-#                     } else{
-#                         if(input$stat=="Avg Minutes"){
-#                             newData %>% group_by(`Player Name`) %>% summarise("Average Minutes" = mean(`Proj Min`))
-#                         } else{
-#                             if(input$stat=="Avg Value"){
-#                                 newData %>% group_by(`Player Name`) %>% summarise("Average Value" = mean(`Actual Val`))
-#                             }
-#                         }}}}}
-#     })
-# })
-        
-        # else {
-        #     if(input$stat=="Avg Usage"){
-        #         newData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`), "Average Usage" = mean(USG))
-        #     } else {
-        #         if(input$stat=="Avg Player Efficiency Rating"){
-        #             newData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`), "Average Usage" = mean(USG), "Average Player Efficiency Rating" = mean(PER))
-        #         } else{
-        #             if(input$stat=="Avg Minutes"){
-        #                 newData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`), "Average Usage" = mean(USG), "Average Player Efficiency Rating" = mean(PER), "Average Minutes" = mean(`Proj Min`))
-        #             } else {
-        #                 if(input$stat=="Avg Value"){
-        #                     newData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`), "Average Usage" = mean(USG), "Average Player Efficiency Rating" = mean(PER), "Average Minutes" = mean(`Proj Min`), "Average Value" = mean(`Actual Val`))
-        #                 } else{
-        #                     input$player
-        #                     }
-        #             }}}}
-#     })
-# })
-        
-        # if(input$stat=="Avg Fantasy Points"){
-        # newData %>% group_by(`Player Name`) %>% summarise("Average Fantasy Points" = mean(`Actual FP`))
-        # } else{
-        #         input$player
-        #    } 
-        #, "Average Value" = mean(`Actual Val`))
         
         
     
