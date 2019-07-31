@@ -217,7 +217,7 @@ ui <- dashboardPage(skin = "blue",
                                           checkboxInput("zero", 
                                             h5("Remove observations with 0 fantasy points"))),
                                      
-                                     downloadButton("savePlot1", "Save Plot"),
+                                     
                                      downloadButton("saveData2", "Download Data")
                                              
                                          ), #closes sidebarPanel
@@ -268,7 +268,7 @@ ui <- dashboardPage(skin = "blue",
                             numericInput('cluster', 'Cluster Count', 3,
                                          min = 1, max = 9),
                             
-                            downloadButton("savePlot2", "Save Plot"),
+                            
                             downloadButton("saveData3", "Download Data")
                             ),#Closes sidebarPanel
                             mainPanel(
@@ -301,7 +301,7 @@ ui <- dashboardPage(skin = "blue",
                                             "Last 5 Games: Average Fantasy Points" = "L5FP", 
                                             "Season Average Fantasy Points" = "SFP" )), #Closes CheckboxGroup
                      
-                                     downloadButton("savePlot3", "Save Plot"),
+                                     
                                      downloadButton("saveData4", "Download Data")
                                          
                                      ),#Closes sidebarPanel
@@ -342,7 +342,7 @@ ui <- dashboardPage(skin = "blue",
                                      numericInput("interaction", 
                                                   "Select Interaction Depth:", 1, min=1, max = 20),
                                      
-                                     downloadButton("savePlot4", "Save Plot"),
+                                     
                                      downloadButton("saveData5", "Download Data")
                                      
                                      
@@ -364,6 +364,8 @@ ui <- dashboardPage(skin = "blue",
                                      selectizeInput("player2", "Player",
                                         selected = "LeBron James",
                                         choices = levels(as.factor(draftKingsData$PlayerName))),
+                                     numericInput("SFP", "Fill in Season Average Fantasy Points",
+                                                  value = 10,  min=0, max=100),
                                      numericInput("Usage", "Fill in Average Usage",
                                                   value = 20,  min=0, max=40),
                                      
@@ -382,8 +384,7 @@ ui <- dashboardPage(skin = "blue",
                                      numericInput("DvP",
                                                   "Fill in Opponent Defense Vs Position",
                                                   value = 0, min=-18, max=13),
-                                     numericInput("SFP", "Fill in Season Average Fantasy Points",
-                                                  value = 10,  min=0, max=100),
+                                    
                                      br(),
                                      h3("Select tuning parameters for boosted model prediction"),
                                      
@@ -396,7 +397,7 @@ ui <- dashboardPage(skin = "blue",
                                                   "Select Interaction Depth:",
                                                   1, min=1, max = 20),
                                      
-                                     downloadButton("savePlot5", "Save Plot"),
+                                     
                                      downloadButton("saveData6", "Download Data")
                                  ),#Closes sidebarPanel
                                  
@@ -462,7 +463,7 @@ server <- shinyServer(function(input, output, session) {
     getData6 <- reactive({
     
     modelData2 <- na.omit(draftKingsData) %>% filter(PlayerName == input$player2) %>% select(-Likes, -PS, -ProjFP, -ProjVal, -Min)
-    train <- sample(1:nrow(na.omit(modelData2)), size = nrow(na.omit(modelData2))*0.8)
+    train <- sample(1:nrow(modelData2), size = nrow(modelData2)*0.8)
     test <- dplyr::setdiff(1:nrow(modelData2), train)
     predDataTrain <- modelData2[train, ]
     predDataTest <- modelData2[test, ]
@@ -783,14 +784,11 @@ server <- shinyServer(function(input, output, session) {
     
     output$Predictions <- renderTable({
     
-        modelData <-getData5()
-        
-        #Create training set and testing set
-        set.seed(31)
-        train <- sample(1:nrow(na.omit(modelData)), size = nrow(na.omit(modelData))*0.8)
-        test <- dplyr::setdiff(1:nrow(modelData), train)
-        predDataTrain <- modelData[train, ]
-        predDataTest <- modelData[test, ]
+        modelData2 <- na.omit(draftKingsData)
+        train <- sample(1:nrow(modelData2), size = nrow(modelData2)*0.8)
+        test <- dplyr::setdiff(1:nrow(modelData2), train)
+        predDataTrain <- modelData2[train, ]
+        predDataTest <- modelData2[test, ]
     
     formula1 <- as.formula(paste("FP", "~", "USG", "+", "PER", "+", "SFGA", "+", "ProjMin", "+", 
                                  "DEff", "+", "Pace", "+", "DvP", "+", "SFP"))
@@ -808,11 +806,14 @@ server <- shinyServer(function(input, output, session) {
                     shrinkage = input$shrinkage, 
                     interaction.depth = input$interaction)
     
-    boostPred <- predict(boostFit,
-             newdata= data.frame(PlayerName = input$player2, USG = input$Usage, PER = input$PER, SFGA = input$SFGA, ProjMin = input$Mins, DEff = input$DEff, Pace = input$Pace, DvP = input$DvP, SFP = input$SFP),
-             n.trees = input$trees2,
-             shrinkage = input$shrinkage2,
-             interaction.depth= input$interaction2)
+    boostPred <- predict(boostFit, 
+                         newdata= data.frame(PlayerName = input$player2,USG = input$Usage, 
+                                             PER = input$PER, SFGA = input$SFGA, 
+                                             ProjMin = input$Mins, DEff = input$DEff, 
+                                             Pace = input$Pace, DvP = input$DvP, SFP = input$SFP),
+                         n.trees = input$trees2,
+                         shrinkage = input$shrinkage2,
+                         interaction.depth= input$interaction2)
     
     
     
@@ -932,17 +933,6 @@ server <- shinyServer(function(input, output, session) {
     )
     
     
-    # output$savePlot2 <- downloadHandler(
-    #     filename = function() { 
-    #         "variablePlot.png" 
-    #                 },
-    #     content = function(file) {
-    #         
-    #         
-    #         ggsave(file, plot = clusterPlot)
-    #     }
-    # )
-
 })
 #             
 
